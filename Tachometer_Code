@@ -1,0 +1,68 @@
+//Subscribe to our YouTube Channel "Voltoscrafts"
+//https://www.youtube.com/@VoltoCrafts
+
+#include <Arduino.h>
+#include <U8x8lib.h>
+#include <SPI.h>
+#include <Wire.h>
+
+// Set up the OLED display (128x64 pixels, I2C) make sure U8g2 library is installed
+U8X8_SSD1306_128X64_NONAME_HW_I2C display(/* reset = */ U8X8_PIN_NONE);
+
+// Variables to hold timing and RPM data
+unsigned long pulseInterval;
+float rpmValue;
+unsigned int rpmDisplay;
+bool noSignal = true;
+
+// -------------------- Initialization --------------------
+void setup() {
+  // Start the OLED and choose a font
+  display.begin();
+  display.setFont(u8x8_font_profont29_2x3_f);
+
+  // Configure Timer1 (16-bit) with a 256 prescaler
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCCR1B |= (1 << CS12);       // Set prescaler
+  TIMSK1 |= (1 << TOIE1);      // Enable overflow interrupt
+
+  // Configure interrupt on pin 2 (INT0) for pulse detection
+  pinMode(2, INPUT);
+  attachInterrupt(digitalPinToInterrupt(2), countPulse, FALLING);
+}
+
+// ------------------ Timer1 Overflow Interrupt ------------------
+ISR(TIMER1_OVF_vect) {
+  // Triggered when no pulse occurs in time — considered too slow
+  noSignal = true;
+}
+
+// -------------------- Main Program Loop --------------------
+void loop() {
+  delay(1000);     // Refresh display every 1 second
+  display.clear();
+
+  if (noSignal) {
+    // If RPM is too low or pulse is missing
+    display.drawString(5, 4, "LOW!");
+  } else {
+    // Calculate RPM from time between pulses
+    rpmValue = 120.0 / (pulseInterval / 31250.0);
+    rpmDisplay = round(rpmValue);
+
+    // Show result on screen
+    display.setCursor(3, 3);
+    display.print(rpmDisplay);
+  }
+}
+
+// ------------------- External Interrupt Handler -------------------
+void countPulse() {
+  // Save time since last pulse and reset counter
+  pulseInterval = TCNT1;
+  TCNT1 = 0;
+  noSignal = false;
+}
+
+//This Code is Inspired by GreatScott YT Channel
